@@ -27,16 +27,25 @@ markdown_extensions:
 
 nav:
   - 首页: index.md
+  - 快速开始: quickstart.md
   - 平台介绍:
       - 平台概览: overview/index.md
       - 平台资源: overview/resources.md
   - 基础使用:
       - GUI 使用: basics/gui.md
       - 命令行使用: basics/cli.md
+      - 环境配置: basics/environments.md
+      - 文件与数据: basics/files.md
       - 提交任务: basics/jobs.md
+      - Slurm 速查: basics/slurm.md
       - 常见问题: basics/faq.md
   - 分专业与需求指引:
       - 导航: guides/index.md
       - 人工智能:
           - 深度学习作业训练任务: guides/ai/deep-learning-homework.md
-      - 其他专业: guides/others.md
+      - 数学与统计: guides/math/index.md
+      - 物理与化学: guides/phy-che/index.md
+      - 其他专业与场景: guides/others.md
+  - 维护与写作:
+      - 写作指南: contributing/writing-guide.md
+      - 用例模板: contributing/use-case-template.md
