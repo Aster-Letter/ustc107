@@ -1,0 +1,42 @@
+site_name: USTC 本科生算力平台文档
+site_description: Computing Platform for Undergraduates 使用文档
+site_url: ""
+
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - 首页: index.md
+  - 平台介绍:
+      - 平台概览: overview/index.md
+      - 平台资源: overview/resources.md
+  - 基础使用:
+      - GUI 使用: basics/gui.md
+      - 命令行使用: basics/cli.md
+      - 提交任务: basics/jobs.md
+      - 常见问题: basics/faq.md
+  - 分专业与需求指引:
+      - 导航: guides/index.md
+      - 人工智能:
+          - 深度学习作业训练任务: guides/ai/deep-learning-homework.md
+      - 其他专业: guides/others.md
