@@ -17,7 +17,52 @@
 下方展示了本项目的组织结构
 
 ```
-
+docs\
+│   index.md
+│   quickstart.md
+│
+├───assets
+│
+├───basics
+│   │   cli.md
+│   │   environments.md
+│   │   faq.md
+│   │   files.md
+│   │   gui.md
+│   │   jobs.md
+│   │   slurm.md
+│   │
+│   └───assets
+│
+├───contributing
+│       writing-guide.md
+│
+├───guides
+│   │   index.md
+│   │   others.md
+│   │
+│   ├───ai
+│   │   │   deep-learning-homework.md
+│   │   │
+│   │   └───assets
+│   │           cp4u-term.png
+│   │           cp4u-work.png
+│   │
+│   ├───math
+│   │   │   index.md
+│   │   │
+│   │   └───assets
+│   │
+│   └───phy-che
+│       │   index.md
+│       │
+│       └───assets
+│
+└───overview
+    │   index.md
+    │   resources.md
+    │
+    └───assets
 ```
 
 
