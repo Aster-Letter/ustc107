@@ -1,105 +1,208 @@
-# 使用集群提交深度学习作业任务
+---
+page_type: guide
+audience: beginner
+status: needs_verification
+last_verified:
+maintainers:
+  - name: docs-team
+    contact: TODO
+graph:
+  priority: normal
+  next:
+    - ../../basics/environments.md
+    - ../../basics/jobs.md
+    - ../../basics/slurm.md
+  related:
+    - ../../basics/files.md
+    - ../../basics/faq.md
+  advanced: []
+---
 
-> 一句话，5090，不来上车吗？
+# 深度学习作业训练任务
 
-[本科生算力平台](https://107.ustc.edu.cn/dashboard)为我们提供了丰富的 GPU 资源，非常适合《深度学习基础》这种作业对 GPU 算力要求较高的课程。我们可以从以下几个方面来了解集群资源，以及使用集群提交深度学习作业任务。
+本页面向需要把 PyTorch 等深度学习作业迁移到平台运行的同学。目标不是一次写出最优训练配置，而是先完成一条可复现路线：准备项目、配置环境、验证 GPU、提交 smoke test、查看日志，再扩大到正式训练。
 
-当前默认一位学生可以使用 1 块 GPU 和 4 核 CPU，内存 4GB，作业最长运行时间为 4 小时，但是这对于深度学习作业来说通常是不够的（CPU 和内存限制较明显），申请更高资源的链接为 [107-算力申请](https://107.ustc.edu.cn/apply)。
+!!! warning "资源参数待核验"
+    GPU 型号、节点名、partition、QOS 和默认配额都属于动态事实，本文只说明字段含义和操作流程。正式提交前请以平台页面或课程通知为准。
 
-## 几个重要概念
+## 适用场景
 
-- **登录节点**：这就是我们在「登录集群——Shell」中连接到的节点（比如 `tradmin-02`），用于进行文件传输、环境配置和提交作业等操作。登录节点上不进行开销大的计算任务。
-- **计算节点**：实际执行我们提交的作业任务的节点（比如 `anode01`、`anode02` 等）。这些节点是实际的 GPU 服务器，负责运行我们的深度学习代码。
+适合：
 
-在[本科生算力平台](https://107.ustc.edu.cn/dashboard)当前的实现中，登录节点和计算节点是共享 `~` 目录的（实现上是一个高速网络文件系统），这意味着：
+- 课程深度学习作业。
+- PyTorch / TensorFlow 训练脚本。
+- 需要 GPU 的模型实验。
+- 从个人电脑迁移到平台运行的训练项目。
 
-- 可以使用登录节点进行文件传输；
-- 可以用登录节点创建 [Miniforge](https://mirrors.ustc.edu.cn/help/anaconda.html#miniforge-mamba) 环境，然后在计算节点上使用；
+不适合直接跳到大规模正式训练。第一次迁移项目时，建议先跑小数据、小 batch、小步数的 smoke test。
 
-## 基本思想
+## 你需要先知道
 
-- 在登录节点上用 Miniforge 配置环境（也可以用 `srun` 进入计算节点配置环境）；
-- 试自己运行代码的习惯，可以使用以下方式：
-    - 编写作业脚本（`.sbatch` 文件），使用 `sbatch` 提交作业；
-    - 使用 `salloc` 申请一个交互式的计算节点，再用 `srun` 进入计算节点，直接在计算节点上运行代码（可以使用 `tmux` 等工具保持会话）；
-- 如果深入计算节点监控任务情况（比如 GPU 占用率 `nvitop`），可以：
-    - 使用 `squeue -u $USER` 查看基本的作业队列情况；
-    - 使用 `srun --jobid=xxx --pty bash` 打开计算节点的 bash；
-    - 使用 [Wandb](https://wandb.ai/site)、[Swanlab](https://swanlab.cn/)（国内，可直连，推荐）等网站，监控实时 GPU 占用率，训练曲线等特征。
+- 登录节点用于整理文件、配置环境和提交作业；训练应在计算节点运行。
+- GPU 只有在申请到 GPU 资源后才可用。
+- 作业脚本必须显式进入项目目录、激活环境、运行训练命令。
+- 日志路径要固定，方便排查。
 
-![在登录节点上打开计算节点的 bash](./assets/cp4u-term.png)
+![在计算节点中查看 GPU 状态的示例](./assets/cp4u-term.png)
 
-## 分步指引
+!!! note "截图说明"
+    上图用于说明“通过作业进入计算节点后再查看 GPU”的检查方式。截图中的节点名、GPU 型号、作业 ID 和资源占用是当时示例，不代表当前固定配置。
 
-### 配置环境
+## 1. 整理项目目录
 
-默认读者使用过 `conda` 管理过 Python 环境。
+运行环境：平台 Shell。
 
-Miniforge 是一个[开源](https://github.com/conda-forge/miniforge)的 Python 环境管理工具，是 [Miniconda](https://docs.conda.io/en/latest/miniconda.html) 的开源替代品，非常适合在集群环境中使用。我们可以在登录节点上安装 Miniforge，并创建一个新的环境来安装我们需要的深度学习库（如 PyTorch）。
+```bash
+mkdir -p ~/projects/dl-homework/{src,data,logs,outputs,scripts}
+cd ~/projects/dl-homework
+```
 
-`mamba`（或 `conda`）可以用来安装：
+建议结构：
 
-- `mamba create -n dl-homework python=3.14` 创建一个新的 Python 环境；
-- `nvitop`, `git`, `cuda-toolkit` 等实用工具；
-- ……
+```text
+dl-homework/
+  src/       # 训练代码
+  data/      # 数据或数据链接
+  scripts/   # sbatch 脚本
+  logs/      # .out / .err 日志
+  outputs/   # checkpoint、图表和结果
+```
 
-### 编写作业脚本
+检查点：训练脚本、数据路径、日志路径和输出路径都能在项目目录中找到。
 
-一个基本的 `.sbatch` 作业脚本示例如下：
+## 2. 配置 Python 环境
+
+运行环境：平台 Shell。
+
+```bash
+conda create -n dl-homework python=3.10 -y
+conda activate dl-homework
+python -V
+```
+
+如果还没有安装 conda，请先参考[环境配置](../../basics/environments.md)中的 Miniconda 安装步骤。安装 PyTorch 时，应按平台 CUDA、驱动和课程要求选择版本，不要直接复制旧命令。
+
+检查 GPU：
+
+运行环境：已申请 GPU 的计算环境或 GPU 作业脚本。
+
+```bash
+nvidia-smi
+python - <<'PY'
+import torch
+print(torch.__version__)
+print(torch.cuda.is_available())
+if torch.cuda.is_available():
+    print(torch.cuda.get_device_name(0))
+PY
+```
+
+检查点：在 GPU 环境中，`torch.cuda.is_available()` 应输出 `True`。
+
+## 3. 写 smoke test
+
+smoke test 是小步数测试，用来验证路径、环境、数据读取、GPU 和日志都正常。它应该在较短时间内结束，不追求模型效果。
+
+建议训练脚本支持这些参数：
+
+```bash
+python src/train.py \
+  --data data/sample \
+  --output outputs/smoke \
+  --epochs 1 \
+  --batch-size 4
+```
+
+如果你的作业代码暂时不支持命令行参数，也可以先在配置文件中准备一份 `configs/smoke.yaml`。
+
+## 4. 提交 GPU smoke test
+
+以下模板使用常见默认分区和 QOS 写法。GPU 类型、CPU 数、内存和时间限制提交前仍需按当前平台界面确认。
+
+运行环境：平台 Shell，保存为 `scripts/smoke.sbatch`。
 
 ```bash
 #!/bin/bash
-#SBATCH --job-name=<your-job-name>
-#SBATCH --output=/home/scc/<your-username>/.../%x_%j.out
-#SBATCH --error=/home/scc/<your-username>/.../%x_%j.err
-#SBATCH --partition=Students
-#SBATCH --qos=qos_stu_medium
-#SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=32G
-#SBATCH --time=8:00:00
+#SBATCH -J dl-smoke
+#SBATCH -p Students
+#SBATCH --qos=qos_stu_default
+#SBATCH --gres=gpu:5090:1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=<memory>
+#SBATCH -t 00:30:00
+#SBATCH -o logs/%x-%j.out
+#SBATCH -e logs/%x-%j.err
 
 set -euo pipefail
 
-cd ~/repo/ai3003/lab/lab4
+cd ~/projects/dl-homework
 
-# 激活 conda 环境
 set +u
-source ~/miniforge3/etc/profile.d/conda.sh
-conda activate ai25
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate dl-homework
 set -u
 
-# 运行训练脚本
-# 待填写
+nvidia-smi
+python src/train.py \
+  --data data/sample \
+  --output outputs/smoke \
+  --epochs 1 \
+  --batch-size 4
 ```
 
-可能要更改的部分可能有 `job-name`、`output/error`, `partition`、`qos`、`gres`（GPU 数量和类型）等部分，可以参考图形界面中的配置来修改。
-
-![参考图形界面的 QOS 和 Partition](./assets/cp4u-work.png)
-
-### Slurm 命令
-
-具体的见（待补充），常用的命令有：
-
-- `sbatch <script.sbatch>`：提交作业脚本；
-- `squeue -u $USER`：查看当前用户的作业队列；
-- `srun --jobid=xxx --pty bash`：进入计算节点的 bash；
-- `scancel <jobid>`：取消作业。
-
-### 文件的传输
-
-有的时候，向登录节点传输文件也是一件很麻烦的事情。由于当前登录节点并没有开启 `ssh` 权限，当前只能通过图形界面的「文件管理」功能来上传和下载文件。
-
-建议在上传较大的文件夹的时候，使用「打包-上传-解包」的方式：
+提交：
 
 ```bash
-# 在本地（如果是类 Unix 系统的话）/集群终端中压缩文件夹
-tar -czvf my_folder.tar.gz my_folder/
-# 或只打包不压缩
-tar -cvf my_folder.tar my_folder/
-
-# 使用图形界面上传后，在登录节点上解压
-tar -xzvf my_folder.tar.gz
-# 或解包
-tar -xvf my_folder.tar
+sbatch scripts/smoke.sbatch
+squeue -u "$USER"
 ```
+
+检查点：
+
+- `logs/` 下出现 `.out` 和 `.err`。
+- `.out` 中有 `nvidia-smi` 输出和训练开始信息。
+- `outputs/smoke` 下有结果、checkpoint 或至少有程序生成的输出。
+- `.err` 没有 traceback、CUDA OOM 或找不到文件。
+
+!!! note "GPU 类型"
+    如果平台允许指定 GPU 类型，可用 `--gres=gpu:5090:1` 或 `--gres=gpu:A100:1` 这类写法。具体型号、节点状态和可用数量会变化，提交前请以平台界面或管理员说明为准。
+
+## 5. 扩大到正式训练
+
+smoke test 成功后，再逐步扩大：
+
+1. 增加训练步数或 epoch。
+2. 增加数据规模。
+3. 调整 batch size。
+4. 观察日志中的单步耗时、显存占用和验证指标。
+5. 必要时再申请更多 CPU、内存、GPU 或运行时间。
+
+不要一次性把所有参数调大。推荐先确认流程正确，再比较资源配置是否真的更快。
+
+![GUI 提交作业中的资源字段示例](./assets/cp4u-work.png)
+
+!!! note "截图说明"
+    上图用于说明 GUI 中分区、QOS、GPU/CPU、运行时间、工作目录和日志字段的位置。截图里的具体分区、QOS、CPU 核数、GPU 型号和内存容量可能已经变化，提交前应以当前界面为准。
+
+## 6. 常见问题
+
+- `nvidia-smi` 不可用：确认命令是否在已申请 GPU 的环境中运行。
+- 作业一直排队：先减少资源申请，或查看等待原因。
+- `CUDA out of memory`：先减小 batch size、输入尺寸或模型规模。
+- 没有日志：确认 `logs/` 目录存在，`#SBATCH -o/-e` 路径正确。
+- 关闭浏览器后担心任务停止：正式训练应使用批处理作业提交，不依赖浏览器窗口。
+
+更多排查见[常见问题](../../basics/faq.md)。
+
+## 7. 结果归档
+
+训练结束后建议把日志、配置和结果一起打包：
+
+运行环境：平台 Shell。
+
+```bash
+cd ~/projects/dl-homework
+tar -czf dl-homework-result-$(date +%Y%m%d).tar.gz logs outputs scripts
+```
+
+下载前先确认压缩包大小合理，不要把无关数据集和缓存一起打包。

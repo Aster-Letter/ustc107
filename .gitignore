@@ -1,2 +1,7 @@
 .venv
 docs-agent/
+site/
+tmp/
+output/playwright/
+.playwright-cli/
+legacy/

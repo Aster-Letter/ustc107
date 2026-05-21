@@ -34,6 +34,7 @@ nav:
   - 基础使用:
       - GUI 使用: basics/gui.md
       - 命令行使用: basics/cli.md
+      - CLI 命令索引: basics/cli-index.md
       - 环境配置: basics/environments.md
       - 文件与数据: basics/files.md
       - 提交任务: basics/jobs.md
@@ -46,5 +47,6 @@ nav:
       - 数学与统计: guides/math/index.md
       - 物理与化学: guides/phy-che/index.md
       - 其他专业与场景: guides/others.md
-  - 维护与写作:
+  - 开发:
       - 写作指南: contributing/writing-guide.md
+      - 开发日志: contributing/changelog.md
